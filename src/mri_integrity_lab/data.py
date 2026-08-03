@@ -92,7 +92,7 @@ class TumorDataset(Dataset[dict[str, object]]):
 
 
 class MultiTaskDataset(Dataset[dict[str, object]]):
-    """Yield one clean and one deterministic manipulated version of each original image."""
+    """Yield balanced variants for training or paired variants for evaluation."""
 
     def __init__(
         self,
@@ -103,6 +103,7 @@ class MultiTaskDataset(Dataset[dict[str, object]]):
         image_size: int = 128,
         augment: bool = False,
         seed: int = 5910,
+        paired: bool = True,
     ) -> None:
         self.frame = frame.reset_index(drop=True)
         self.mean = float(mean)
@@ -110,14 +111,19 @@ class MultiTaskDataset(Dataset[dict[str, object]]):
         self.image_size = image_size
         self.augment = augment
         self.seed = seed
+        self.paired = paired
         self.tamper_types = tuple(TamperType)
 
     def __len__(self) -> int:
-        return len(self.frame) * 2
+        return len(self.frame) * 2 if self.paired else len(self.frame)
 
     def __getitem__(self, index: int) -> dict[str, object]:
-        base_index = index // 2
-        is_manipulated = index % 2 == 1
+        if self.paired:
+            base_index = index // 2
+            is_manipulated = index % 2 == 1
+        else:
+            base_index = index
+            is_manipulated = (base_index + self.seed) % 2 == 1
         row = self.frame.iloc[base_index]
         image = load_standardized_image(row["image_path"], image_size=self.image_size)
         if self.augment:

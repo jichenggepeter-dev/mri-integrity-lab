@@ -31,6 +31,7 @@ class TrainConfig:
     num_workers: int = 0
     device: str = "cpu"
     seed: int = 5910
+    initial_checkpoint: str | None = None
 
     def validate(self) -> None:
         if self.model_name not in {"baseline", "improved", "multitask"}:
@@ -39,6 +40,8 @@ class TrainConfig:
             raise ValueError("epochs and batch_size must be positive.")
         if not 0.0 <= self.integrity_loss_weight <= 2.0:
             raise ValueError("integrity_loss_weight must be between 0 and 2.")
+        if self.initial_checkpoint and self.model_name != "multitask":
+            raise ValueError("Checkpoint initialization is only supported for multitask training.")
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)
@@ -59,4 +62,3 @@ class ProjectPaths:
     @property
     def figures(self) -> Path:
         return self.root / "reports" / "figures"
-

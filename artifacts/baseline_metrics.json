@@ -1,0 +1,35 @@
+{
+  "model_name": "baseline",
+  "parameter_count": 6082,
+  "device": "cpu",
+  "image_size": 128,
+  "normalization": {
+    "mean": 0.2206103607452544,
+    "std": 0.24470481421994697
+  },
+  "best_validation_loss": 0.5649503522933124,
+  "epochs_completed": 10,
+  "training_seconds": 133.28608202934265,
+  "test_tumor_clean": {
+    "count": 603,
+    "positive_rate": 0.5704809286898839,
+    "threshold": 0.5,
+    "accuracy": 0.693200663349917,
+    "balanced_accuracy": 0.6977137020741672,
+    "precision": 0.7658862876254181,
+    "recall": 0.6656976744186046,
+    "f1": 0.7122861586314152,
+    "confusion_matrix": [
+      [
+        189,
+        70
+      ],
+      [
+        115,
+        229
+      ]
+    ],
+    "roc_auc": 0.7805625392834695,
+    "pr_auc": 0.7972067352705012
+  }
+}

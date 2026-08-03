@@ -1,0 +1,105 @@
+{
+  "model_name": "multitask",
+  "parameter_count": 162772,
+  "device": "cpu",
+  "image_size": 128,
+  "normalization": {
+    "mean": 0.2206103607452544,
+    "std": 0.24470481421994697
+  },
+  "best_validation_loss": 0.46139080619495176,
+  "epochs_completed": 10,
+  "training_seconds": 545.1189827919006,
+  "test_tumor_clean": {
+    "count": 603,
+    "positive_rate": 0.5704809286898839,
+    "threshold": 0.5,
+    "accuracy": 0.9684908789386402,
+    "balanced_accuracy": 0.9685676124629613,
+    "precision": 0.9765395894428153,
+    "recall": 0.9680232558139535,
+    "f1": 0.9722627737226277,
+    "confusion_matrix": [
+      [
+        251,
+        8
+      ],
+      [
+        11,
+        333
+      ]
+    ],
+    "roc_auc": 0.9900444464397954,
+    "pr_auc": 0.993664585374605
+  },
+  "test_tumor_all_inputs": {
+    "count": 1206,
+    "positive_rate": 0.5704809286898839,
+    "threshold": 0.5,
+    "accuracy": 0.9601990049751243,
+    "balanced_accuracy": 0.9598691299272695,
+    "precision": 0.9678362573099415,
+    "recall": 0.9622093023255814,
+    "f1": 0.9650145772594753,
+    "confusion_matrix": [
+      [
+        496,
+        22
+      ],
+      [
+        26,
+        662
+      ]
+    ],
+    "roc_auc": 0.9888940019753971,
+    "pr_auc": 0.9925755544916753
+  },
+  "test_integrity": {
+    "count": 1206,
+    "positive_rate": 0.5,
+    "threshold": 0.5,
+    "accuracy": 0.5414593698175788,
+    "balanced_accuracy": 0.5414593698175787,
+    "precision": 0.5296208530805687,
+    "recall": 0.7412935323383084,
+    "f1": 0.61782999308915,
+    "confusion_matrix": [
+      [
+        206,
+        397
+      ],
+      [
+        156,
+        447
+      ]
+    ],
+    "roc_auc": 0.5754533028610402,
+    "pr_auc": 0.5754612254985402
+  },
+  "test_robustness": {
+    "paired_count": 603,
+    "mean_absolute_probability_shift": 0.027789723679200976,
+    "median_absolute_probability_shift": 0.0020211641676723957,
+    "prediction_flip_rate": 0.02321724709784411,
+    "by_tamper_type": [
+      {
+        "tamper_type": "copy_move",
+        "count": 201,
+        "mean_absolute_shift": 0.025943902230264666,
+        "flip_rate": 0.014925373134328358
+      },
+      {
+        "tamper_type": "intensity_noise",
+        "count": 201,
+        "mean_absolute_shift": 0.019159205095269527,
+        "flip_rate": 0.01990049751243781
+      },
+      {
+        "tamper_type": "occlusion",
+        "count": 201,
+        "mean_absolute_shift": 0.03826606371206873,
+        "flip_rate": 0.03482587064676617
+      }
+    ]
+  }
+}

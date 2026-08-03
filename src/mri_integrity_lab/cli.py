@@ -44,6 +44,7 @@ def _train(arguments: argparse.Namespace) -> None:
         integrity_loss_weight=arguments.integrity_loss_weight,
         device=arguments.device,
         seed=arguments.seed,
+        initial_checkpoint=arguments.initial_checkpoint,
     )
     artifacts = train_experiment(
         manifest_path=Path(arguments.manifest),
@@ -84,6 +85,7 @@ def build_parser() -> argparse.ArgumentParser:
     train.add_argument("--device", choices=["cpu", "mps"], default="cpu")
     train.add_argument("--image-size", type=int, default=128)
     train.add_argument("--seed", type=int, default=5910)
+    train.add_argument("--initial-checkpoint")
     train.set_defaults(handler=_train)
     return parser
 

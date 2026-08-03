@@ -49,6 +49,21 @@ def resolve_device(requested: str) -> torch.device:
     return torch.device(requested)
 
 
+def _initialize_multitask_model(model: MultiTaskCNN, checkpoint_path: Path) -> None:
+    checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
+    if checkpoint.get("model_name") != "improved":
+        raise ValueError("Multitask initialization requires an improved-model checkpoint.")
+
+    initialized_state = model.state_dict()
+    for key, value in checkpoint["state_dict"].items():
+        target_key = key
+        if key.startswith("classifier."):
+            target_key = key.replace("classifier.", "tumor_head.", 1)
+        if target_key in initialized_state:
+            initialized_state[target_key] = value
+    model.load_state_dict(initialized_state)
+
+
 def _class_weights(labels: pd.Series, device: torch.device) -> torch.Tensor:
     counts = np.bincount(labels.astype(int), minlength=2)
     weights = len(labels) / (2.0 * np.maximum(counts, 1))
@@ -191,13 +206,25 @@ def train_experiment(
     common = {"mean": mean, "std": std, "image_size": image_size}
     if config.model_name == "multitask":
         train_dataset = dataset_class(
-            train_frame, **common, augment=True, seed=config.seed  # type: ignore[arg-type]
+            train_frame,
+            **common,
+            augment=True,
+            seed=config.seed,
+            paired=False,  # type: ignore[arg-type]
         )
         validation_dataset = dataset_class(
-            validation_frame, **common, augment=False, seed=config.seed  # type: ignore[arg-type]
+            validation_frame,
+            **common,
+            augment=False,
+            seed=config.seed,
+            paired=True,  # type: ignore[arg-type]
         )
         test_dataset = dataset_class(
-            test_frame, **common, augment=False, seed=config.seed  # type: ignore[arg-type]
+            test_frame,
+            **common,
+            augment=False,
+            seed=config.seed,
+            paired=True,  # type: ignore[arg-type]
         )
     else:
         train_dataset = dataset_class(train_frame, **common, augment=True)
@@ -227,6 +254,8 @@ def train_experiment(
     )
 
     model = build_model(config.model_name, dropout=config.dropout).to(device)
+    if config.initial_checkpoint:
+        _initialize_multitask_model(model, Path(config.initial_checkpoint))  # type: ignore[arg-type]
     tumor_loss = nn.CrossEntropyLoss(weight=_class_weights(train_frame["label"], device))
     integrity_loss = nn.CrossEntropyLoss()
     optimizer = torch.optim.AdamW(
@@ -260,7 +289,8 @@ def train_experiment(
         history.append(row)
         print(
             f"Epoch {epoch:02d} | train {train_result['loss']:.4f} | "
-            f"validation {validation_result['loss']:.4f}"
+            f"validation {validation_result['loss']:.4f}",
+            flush=True,
         )
         if validation_result["loss"] < best_loss - 1e-4:
             best_loss = validation_result["loss"]
@@ -322,4 +352,3 @@ def train_experiment(
         json.dumps(asdict(config), indent=2), encoding="utf-8"
     )
     return TrainArtifacts(checkpoint_path, history_path, metrics_path, predictions_path)
-

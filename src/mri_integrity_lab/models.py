@@ -4,6 +4,7 @@ from typing import NamedTuple
 
 import torch
 from torch import nn
+from torch.nn import functional
 
 
 class MultiTaskOutput(NamedTuple):
@@ -80,18 +81,50 @@ class SharedEncoder(nn.Module):
     def gradcam_layer(self) -> nn.Module:
         return self.stage4[0]
 
-    def forward(self, images: torch.Tensor) -> torch.Tensor:
+    def forward_features(self, images: torch.Tensor) -> torch.Tensor:
         features = self.stage1(images)
         features = self.stage2(features)
         features = self.stage3(features)
-        features = self.stage4(features)
+        return self.stage4(features)
+
+    def forward(self, images: torch.Tensor) -> torch.Tensor:
+        features = self.forward_features(images)
         return self.pool(features).flatten(1)
 
 
-def _head(dropout: float) -> nn.Sequential:
+class ForensicEncoder(nn.Module):
+    """Extract local residual patterns that global semantic pooling can suppress."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.features = nn.Sequential(
+            nn.Conv2d(1, 8, kernel_size=5, stride=2, padding=2, bias=False),
+            nn.BatchNorm2d(8),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(8, 16, kernel_size=3, stride=2, padding=1, bias=False),
+            nn.BatchNorm2d(16),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(16, 32, kernel_size=3, stride=2, padding=1, bias=False),
+            nn.BatchNorm2d(32),
+            nn.ReLU(inplace=True),
+        )
+
+    @property
+    def gradcam_layer(self) -> nn.Module:
+        return self.features[6]
+
+    def forward(self, images: torch.Tensor) -> torch.Tensor:
+        residual = images - functional.avg_pool2d(images, kernel_size=5, stride=1, padding=2)
+        features = self.features(residual)
+        average = functional.adaptive_avg_pool2d(features, 1).flatten(1)
+        maximum = functional.adaptive_max_pool2d(features, 1).flatten(1)
+        return torch.cat([average, maximum], dim=1)
+
+
+def _head(dropout: float, input_features: int = 128) -> nn.Sequential:
     return nn.Sequential(
         nn.Dropout(dropout),
-        nn.Linear(128, 64),
+        nn.Linear(input_features, 64),
         nn.ReLU(inplace=True),
         nn.Dropout(dropout / 2),
         nn.Linear(64, 2),
@@ -116,18 +149,26 @@ class MultiTaskCNN(nn.Module):
     def __init__(self, dropout: float = 0.30) -> None:
         super().__init__()
         self.encoder = SharedEncoder()
+        self.forensic_encoder = ForensicEncoder()
         self.tumor_head = _head(dropout)
-        self.integrity_head = _head(dropout)
+        self.integrity_head = _head(dropout, input_features=192)
 
     @property
     def gradcam_layer(self) -> nn.Module:
         return self.encoder.gradcam_layer
 
+    @property
+    def integrity_gradcam_layer(self) -> nn.Module:
+        return self.forensic_encoder.gradcam_layer
+
     def forward(self, images: torch.Tensor) -> MultiTaskOutput:
-        features = self.encoder(images)
+        semantic_features = self.encoder(images)
+        forensic_features = self.forensic_encoder(images)
         return MultiTaskOutput(
-            tumor_logits=self.tumor_head(features),
-            integrity_logits=self.integrity_head(features),
+            tumor_logits=self.tumor_head(semantic_features),
+            integrity_logits=self.integrity_head(
+                torch.cat([semantic_features, forensic_features], dim=1)
+            ),
         )
 
 
