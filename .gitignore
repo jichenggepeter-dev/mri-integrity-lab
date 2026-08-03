@@ -1,0 +1,16 @@
+.DS_Store
+.env
+.pytest_cache/
+.ruff_cache/
+.venv/
+__pycache__/
+*.py[cod]
+
+# The source dataset is downloaded separately and is not redistributed here.
+data/raw/
+data/processed/
+
+# Training scratch files are reproducible and can be regenerated.
+artifacts/checkpoints/
+artifacts/tmp/
+
