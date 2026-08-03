@@ -104,6 +104,7 @@ uncertain or high.
 | `artifacts/` | Checkpoints, metrics, histories, held-out predictions |
 | `reports/figures/` | Reproducible experiment figures |
 | `reports/evidence_pack.md` | Factual notes for the student's independent report writing |
+| `presentation/MRI_Integrity_Lab_Jicheng_Ge.pptx` | Ten-slide presentation deck |
 | `tests/` | Unit and Streamlit smoke tests |
 
 ## Limitations

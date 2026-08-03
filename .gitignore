@@ -14,3 +14,6 @@ data/processed/
 artifacts/checkpoints/
 artifacts/tmp/
 
+# Local presentation QA renders are regenerated from the committed deck.
+presentation/*.inspect.ndjson
+presentation/MRI_Integrity_Lab_Jicheng_Ge/
