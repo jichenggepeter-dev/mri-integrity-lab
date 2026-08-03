@@ -21,8 +21,19 @@ from .data import (
     compute_normalization_stats,
     make_loader,
 )
-from .evaluation import binary_metrics, robustness_metrics, write_metrics
-from .models import MultiTaskCNN, MultiTaskOutput, build_model, parameter_count
+from .evaluation import (
+    binary_metrics,
+    robustness_metrics,
+    select_balanced_accuracy_threshold,
+    write_metrics,
+)
+from .models import (
+    MultiTaskCNN,
+    MultiTaskOutput,
+    build_model,
+    parameter_count,
+    trainable_parameter_count,
+)
 
 
 @dataclass(frozen=True)
@@ -31,6 +42,19 @@ class TrainArtifacts:
     history_path: Path
     metrics_path: Path
     predictions_path: Path
+
+
+def _integrity_thresholds(validation_predictions: pd.DataFrame) -> dict[str, float | str]:
+    decision = select_balanced_accuracy_threshold(
+        validation_predictions["integrity_label"].to_numpy(),
+        validation_predictions["integrity_probability"].to_numpy(),
+    )
+    return {
+        "lower": max(0.0, decision - 0.10),
+        "decision": decision,
+        "upper": min(1.0, decision + 0.10),
+        "selection": "validation_youden_j_with_0.10_review_band",
+    }
 
 
 def seed_everything(seed: int) -> None:
@@ -114,6 +138,9 @@ def _multitask_epoch(
 ) -> dict[str, float]:
     is_training = optimizer is not None
     model.train(is_training)
+    if config.freeze_tumor_backbone:
+        model.encoder.eval()
+        model.tumor_head.eval()
     totals = {"loss": 0.0, "tumor_loss": 0.0, "integrity_loss": 0.0}
     tumor_labels: list[int] = []
     tumor_predictions: list[int] = []
@@ -210,7 +237,7 @@ def train_experiment(
             **common,
             augment=True,
             seed=config.seed,
-            paired=False,  # type: ignore[arg-type]
+            paired=True,  # type: ignore[arg-type]
         )
         validation_dataset = dataset_class(
             validation_frame,
@@ -256,10 +283,16 @@ def train_experiment(
     model = build_model(config.model_name, dropout=config.dropout).to(device)
     if config.initial_checkpoint:
         _initialize_multitask_model(model, Path(config.initial_checkpoint))  # type: ignore[arg-type]
+    if config.freeze_tumor_backbone:
+        for module in (model.encoder, model.tumor_head):  # type: ignore[union-attr]
+            for parameter in module.parameters():
+                parameter.requires_grad = False
     tumor_loss = nn.CrossEntropyLoss(weight=_class_weights(train_frame["label"], device))
     integrity_loss = nn.CrossEntropyLoss()
     optimizer = torch.optim.AdamW(
-        model.parameters(), lr=config.learning_rate, weight_decay=config.weight_decay
+        (parameter for parameter in model.parameters() if parameter.requires_grad),
+        lr=config.learning_rate,
+        weight_decay=config.weight_decay,
     )
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, mode="min", factor=0.5, patience=2
@@ -309,6 +342,7 @@ def train_experiment(
     metrics: dict[str, object] = {
         "model_name": config.model_name,
         "parameter_count": parameter_count(model),
+        "trainable_parameter_count": trainable_parameter_count(model),
         "device": str(device),
         "image_size": image_size,
         "normalization": {"mean": mean, "std": std},
@@ -321,6 +355,10 @@ def train_experiment(
         ),
     }
     if config.model_name == "multitask":
+        validation_predictions = _predict(
+            model, validation_loader, device, config.model_name
+        )
+        integrity_thresholds = _integrity_thresholds(validation_predictions)
         metrics["test_tumor_all_inputs"] = binary_metrics(
             predictions["tumor_label"].to_numpy(),
             predictions["tumor_probability"].to_numpy(),
@@ -328,8 +366,15 @@ def train_experiment(
         metrics["test_integrity"] = binary_metrics(
             predictions["integrity_label"].to_numpy(),
             predictions["integrity_probability"].to_numpy(),
+            threshold=float(integrity_thresholds["decision"]),
         )
+        metrics["integrity_calibration"] = integrity_thresholds
         metrics["test_robustness"] = robustness_metrics(predictions)
+        validation_predictions.to_csv(
+            artifact_dir / "multitask_validation_predictions.csv", index=False
+        )
+    else:
+        integrity_thresholds = None
 
     checkpoint_path = artifact_dir / f"{config.model_name}.pt"
     history_path = artifact_dir / f"{config.model_name}_history.csv"
@@ -342,6 +387,7 @@ def train_experiment(
             "train_config": asdict(config),
             "image_size": image_size,
             "normalization": {"mean": mean, "std": std},
+            "integrity_thresholds": integrity_thresholds,
         },
         checkpoint_path,
     )
@@ -352,3 +398,66 @@ def train_experiment(
         json.dumps(asdict(config), indent=2), encoding="utf-8"
     )
     return TrainArtifacts(checkpoint_path, history_path, metrics_path, predictions_path)
+
+
+def calibrate_multitask_artifacts(
+    *,
+    manifest_path: Path,
+    data_root: Path,
+    artifact_dir: Path,
+) -> dict[str, float | str]:
+    """Calibrate an existing final checkpoint without repeating model training."""
+    checkpoint_path = artifact_dir / "multitask.pt"
+    checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
+    config = TrainConfig(**checkpoint["train_config"])
+    manifest = attach_image_paths(pd.read_csv(manifest_path), data_root)
+    validation_frame = manifest[manifest["split"] == "validation"].copy()
+    normalization = checkpoint["normalization"]
+    validation_dataset = MultiTaskDataset(
+        validation_frame,
+        mean=float(normalization["mean"]),
+        std=float(normalization["std"]),
+        image_size=int(checkpoint["image_size"]),
+        augment=False,
+        seed=config.seed,
+        paired=True,
+    )
+    validation_loader = make_loader(
+        validation_dataset,
+        batch_size=config.batch_size,
+        shuffle=False,
+        seed=config.seed,
+        num_workers=config.num_workers,
+    )
+    model = build_model("multitask", dropout=config.dropout)
+    if not isinstance(model, MultiTaskCNN):
+        raise TypeError("Expected MultiTaskCNN from the model factory.")
+    model.load_state_dict(checkpoint["state_dict"])
+    if config.freeze_tumor_backbone:
+        for module in (model.encoder, model.tumor_head):
+            for parameter in module.parameters():
+                parameter.requires_grad = False
+    validation_predictions = _predict(
+        model, validation_loader, torch.device("cpu"), "multitask"
+    )
+    thresholds = _integrity_thresholds(validation_predictions)
+    validation_predictions.to_csv(
+        artifact_dir / "multitask_validation_predictions.csv", index=False
+    )
+
+    predictions = pd.read_csv(artifact_dir / "multitask_test_predictions.csv")
+    metrics_path = artifact_dir / "multitask_metrics.json"
+    metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
+    metrics["parameter_count"] = parameter_count(model)
+    metrics["trainable_parameter_count"] = trainable_parameter_count(model)
+    metrics["test_integrity"] = binary_metrics(
+        predictions["integrity_label"].to_numpy(),
+        predictions["integrity_probability"].to_numpy(),
+        threshold=float(thresholds["decision"]),
+    )
+    metrics["integrity_calibration"] = thresholds
+    write_metrics(metrics, metrics_path)
+
+    checkpoint["integrity_thresholds"] = thresholds
+    torch.save(checkpoint, checkpoint_path)
+    return thresholds

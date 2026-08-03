@@ -1,8 +1,8 @@
 {
   "model_name": "multitask",
-  "epochs": 12,
+  "epochs": 10,
   "batch_size": 64,
-  "learning_rate": 0.0003,
+  "learning_rate": 0.001,
   "weight_decay": 0.0001,
   "dropout": 0.3,
   "integrity_loss_weight": 1.0,
@@ -10,5 +10,6 @@
   "num_workers": 0,
   "device": "cpu",
   "seed": 5910,
-  "initial_checkpoint": "artifacts/improved.pt"
+  "initial_checkpoint": "artifacts/improved.pt",
+  "freeze_tumor_backbone": true
 }

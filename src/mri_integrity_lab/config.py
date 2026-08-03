@@ -32,6 +32,7 @@ class TrainConfig:
     device: str = "cpu"
     seed: int = 5910
     initial_checkpoint: str | None = None
+    freeze_tumor_backbone: bool = False
 
     def validate(self) -> None:
         if self.model_name not in {"baseline", "improved", "multitask"}:
@@ -42,6 +43,8 @@ class TrainConfig:
             raise ValueError("integrity_loss_weight must be between 0 and 2.")
         if self.initial_checkpoint and self.model_name != "multitask":
             raise ValueError("Checkpoint initialization is only supported for multitask training.")
+        if self.freeze_tumor_backbone and not self.initial_checkpoint:
+            raise ValueError("Freezing the tumor backbone requires an initial checkpoint.")
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)

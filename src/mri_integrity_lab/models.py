@@ -183,4 +183,8 @@ def build_model(model_name: str, dropout: float = 0.30) -> nn.Module:
 
 
 def parameter_count(model: nn.Module) -> int:
+    return sum(parameter.numel() for parameter in model.parameters())
+
+
+def trainable_parameter_count(model: nn.Module) -> int:
     return sum(parameter.numel() for parameter in model.parameters() if parameter.requires_grad)

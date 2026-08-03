@@ -43,6 +43,8 @@ class ModelBundle:
     mean: float
     std: float
     device: torch.device
+    integrity_lower_threshold: float
+    integrity_upper_threshold: float
 
 
 @dataclass(frozen=True)
@@ -58,7 +60,7 @@ class InferenceResult:
 
 def load_model_bundle(checkpoint_path: Path, device_name: str = "cpu") -> ModelBundle:
     device = torch.device(device_name)
-    checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
+    checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=True)
     if checkpoint.get("model_name") != "multitask":
         raise ValueError("The Streamlit application requires a multitask checkpoint.")
     model = build_model("multitask", dropout=checkpoint["train_config"]["dropout"])
@@ -67,12 +69,15 @@ def load_model_bundle(checkpoint_path: Path, device_name: str = "cpu") -> ModelB
     model.load_state_dict(checkpoint["state_dict"])
     model.to(device).eval()
     normalization = checkpoint["normalization"]
+    thresholds = checkpoint.get("integrity_thresholds") or {"lower": 0.35, "upper": 0.65}
     return ModelBundle(
         model=model,
         image_size=int(checkpoint["image_size"]),
         mean=float(normalization["mean"]),
         std=float(normalization["std"]),
         device=device,
+        integrity_lower_threshold=float(thresholds["lower"]),
+        integrity_upper_threshold=float(thresholds["upper"]),
     )
 
 
@@ -106,7 +111,11 @@ def run_inference(image: Image.Image, bundle: ModelBundle) -> InferenceResult:
         tumor_probability=tumor_probability,
         integrity_probability=integrity_probability,
         predicted_class="Tumor" if tumor_probability >= 0.5 else "Normal",
-        reliability=reliability_state(integrity_probability),
+        reliability=reliability_state(
+            integrity_probability,
+            lower_threshold=bundle.integrity_lower_threshold,
+            upper_threshold=bundle.integrity_upper_threshold,
+        ),
         standardized_image=standardized,
         tumor_heatmap=tumor_heatmap,
         integrity_heatmap=integrity_heatmap,

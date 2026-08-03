@@ -14,6 +14,7 @@ from sklearn.metrics import (
     precision_score,
     recall_score,
     roc_auc_score,
+    roc_curve,
 )
 
 
@@ -42,6 +43,24 @@ def binary_metrics(
         metrics["roc_auc"] = float(roc_auc_score(labels, probabilities))
         metrics["pr_auc"] = float(average_precision_score(labels, probabilities))
     return metrics
+
+
+def select_balanced_accuracy_threshold(
+    labels: np.ndarray,
+    probabilities: np.ndarray,
+) -> float:
+    """Choose a decision threshold on validation data using Youden's J statistic."""
+    labels = np.asarray(labels, dtype=int)
+    probabilities = np.asarray(probabilities, dtype=float)
+    if len(np.unique(labels)) != 2:
+        raise ValueError("Threshold selection requires both binary classes.")
+    false_positive_rate, true_positive_rate, thresholds = roc_curve(labels, probabilities)
+    finite = np.isfinite(thresholds)
+    scores = true_positive_rate[finite] - false_positive_rate[finite]
+    candidates = thresholds[finite]
+    best_score = scores.max()
+    tied = candidates[np.isclose(scores, best_score)]
+    return float(tied[np.argmin(np.abs(tied - 0.5))])
 
 
 def robustness_metrics(predictions: pd.DataFrame) -> dict[str, object]:
@@ -88,4 +107,3 @@ def robustness_metrics(predictions: pd.DataFrame) -> dict[str, object]:
 def write_metrics(metrics: dict[str, object], path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(metrics, indent=2), encoding="utf-8")
-

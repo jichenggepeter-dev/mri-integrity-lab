@@ -34,3 +34,15 @@ image manipulation, visualizes model attention, and exposes the results in Strea
 - Saved metrics generated from held-out test data only.
 - Streamlit smoke test and desktop/mobile browser screenshots.
 
+## Completed milestones
+
+- Data audit: 4,600 readable files, one explicit exclusion, 585 duplicate copies removed.
+- Baseline and improved tumor classifiers evaluated on 603 held-out originals.
+- Two weak integrity variants archived before the paired residual model reached ROC-AUC 0.870.
+- Validation-only integrity calibration saved in the final checkpoint.
+- Eleven automated tests and six visually reviewed experiment figures completed.
+
+## Remaining external steps
+
+- Push the local Git history after GitHub CLI authentication is restored.
+- Capture desktop/mobile browser screenshots after local port binding is approved.

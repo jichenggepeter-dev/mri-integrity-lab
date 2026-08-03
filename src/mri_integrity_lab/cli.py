@@ -6,7 +6,8 @@ from pathlib import Path
 
 from .config import DataConfig, TrainConfig
 from .preprocessing import assign_splits, audit_dataset, write_audit_artifacts
-from .training import train_experiment
+from .reporting import generate_report_assets
+from .training import calibrate_multitask_artifacts, train_experiment
 
 
 def _audit(arguments: argparse.Namespace) -> None:
@@ -45,6 +46,7 @@ def _train(arguments: argparse.Namespace) -> None:
         device=arguments.device,
         seed=arguments.seed,
         initial_checkpoint=arguments.initial_checkpoint,
+        freeze_tumor_backbone=arguments.freeze_tumor_backbone,
     )
     artifacts = train_experiment(
         manifest_path=Path(arguments.manifest),
@@ -54,6 +56,25 @@ def _train(arguments: argparse.Namespace) -> None:
         image_size=arguments.image_size,
     )
     print(json.dumps({key: str(value) for key, value in artifacts.__dict__.items()}, indent=2))
+
+
+def _calibrate(arguments: argparse.Namespace) -> None:
+    thresholds = calibrate_multitask_artifacts(
+        manifest_path=Path(arguments.manifest),
+        data_root=Path(arguments.data_root),
+        artifact_dir=Path(arguments.artifact_dir),
+    )
+    print(json.dumps(thresholds, indent=2))
+
+
+def _report(arguments: argparse.Namespace) -> None:
+    paths = generate_report_assets(
+        artifact_dir=Path(arguments.artifact_dir),
+        report_dir=Path(arguments.report_dir),
+        manifest_path=Path(arguments.manifest),
+        data_root=Path(arguments.data_root),
+    )
+    print(json.dumps([str(path) for path in paths], indent=2))
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -86,7 +107,23 @@ def build_parser() -> argparse.ArgumentParser:
     train.add_argument("--image-size", type=int, default=128)
     train.add_argument("--seed", type=int, default=5910)
     train.add_argument("--initial-checkpoint")
+    train.add_argument("--freeze-tumor-backbone", action="store_true")
     train.set_defaults(handler=_train)
+
+    calibrate = subparsers.add_parser(
+        "calibrate", help="Calibrate a trained integrity head on validation data."
+    )
+    calibrate.add_argument("--manifest", default="data/processed/manifest.csv")
+    calibrate.add_argument("--data-root", required=True)
+    calibrate.add_argument("--artifact-dir", default="artifacts")
+    calibrate.set_defaults(handler=_calibrate)
+
+    report = subparsers.add_parser("report", help="Generate factual report assets and figures.")
+    report.add_argument("--manifest", default="data/processed/manifest.csv")
+    report.add_argument("--data-root", required=True)
+    report.add_argument("--artifact-dir", default="artifacts")
+    report.add_argument("--report-dir", default="reports")
+    report.set_defaults(handler=_report)
     return parser
 
 
