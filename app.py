@@ -60,6 +60,8 @@ st.markdown(
     .research-limit {border-top: 1px solid var(--line); margin-top: 1.5rem; padding-top: 0.8rem;
                      color: var(--muted); font-size: 0.88rem;}
     [data-testid="stFileUploader"] section {border-radius: 4px; border-color: var(--line);}
+    [data-testid="stImage"] {width: 100%; max-width: 420px;}
+    [data-testid="stImage"] img {width: 100%; height: auto;}
     button {border-radius: 4px !important;}
     </style>
     """,
@@ -113,7 +115,7 @@ with st.spinner("Running both model heads and attention maps..."):
 image_column, result_column = st.columns([1.05, 1.25], gap="large")
 with image_column:
     st.subheader("Input image")
-    st.image(uploaded_image, use_container_width=True)
+    st.image(uploaded_image, width="stretch")
 
 with result_column:
     st.subheader("Tumor classification")
@@ -139,13 +141,13 @@ with tumor_tab:
     st.image(
         overlay_heatmap(result.standardized_image, result.tumor_heatmap),
         caption="Grad-CAM for the tumor class",
-        width=420,
+        width="stretch",
     )
 with integrity_tab:
     st.image(
         overlay_heatmap(result.standardized_image, result.integrity_heatmap),
         caption="Grad-CAM for synthetic manipulation risk",
-        width=420,
+        width="stretch",
     )
 
 st.markdown(

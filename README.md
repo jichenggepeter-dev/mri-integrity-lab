@@ -103,6 +103,7 @@ uncertain or high.
 | `app.py` | Streamlit research interface |
 | `artifacts/` | Checkpoints, metrics, histories, held-out predictions |
 | `reports/figures/` | Reproducible experiment figures |
+| `reports/ui/` | Verified desktop and mobile interface screenshots |
 | `reports/evidence_pack.md` | Factual notes for the student's independent report writing |
 | `presentation/MRI_Integrity_Lab_Jicheng_Ge.pptx` | Ten-slide presentation deck |
 | `tests/` | Unit and Streamlit smoke tests |

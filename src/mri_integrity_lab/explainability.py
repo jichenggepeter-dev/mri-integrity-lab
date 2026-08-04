@@ -6,8 +6,6 @@ import torch.nn.functional as functional
 from matplotlib import colormaps
 from torch import nn
 
-from .models import MultiTaskOutput
-
 
 class GradCAM:
     def __init__(self, model: nn.Module, target_layer: nn.Module) -> None:
@@ -37,7 +35,8 @@ class GradCAM:
         self.model.eval()
         self.model.zero_grad(set_to_none=True)
         output = self.model(image)
-        if isinstance(output, MultiTaskOutput):
+        # Attribute checks survive Streamlit hot reloads, where NamedTuple class identity changes.
+        if hasattr(output, "tumor_logits") and hasattr(output, "integrity_logits"):
             logits = output.tumor_logits if task == "tumor" else output.integrity_logits
         else:
             logits = output
@@ -61,4 +60,3 @@ def overlay_heatmap(image: np.ndarray, heatmap: np.ndarray, alpha: float = 0.42)
     base = np.repeat(grayscale[..., None], 3, axis=2)
     color = colormaps["magma"](np.clip(heatmap, 0, 1))[..., :3]
     return np.clip((1.0 - alpha) * base + alpha * color, 0.0, 1.0)
-
